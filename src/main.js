@@ -6,8 +6,11 @@ const config = {
     width: 800,
     height: 600,
     backgroundColor: "#222222",
-
-    scene: [Level1Scene]
+    scene: [Level1Scene],
+    scale: {
+    mode: Phaser.Scale.FIT,
+    autoCenter: Phaser.Scale.CENTER_BOTH
+}
 };
 
 new Phaser.Game(config);

@@ -5,34 +5,95 @@ export default class Level1Scene extends Phaser.Scene {
     constructor() {
         super("Level1Scene");
     }
+    preload() {
+        this.load.tilemapTiledJSON(
+        "level1",
+        "Maps/Level1.tmj"
+    );
+    
+        this.load.image(
+            "tiles",
+            "TileSet/AssetMapa.png"
+        );
+        this.load.on("filecomplete", (key) => {
+        console.log("Cargó:", key);
+        });
+
+        this.load.on("loaderror", (file) => {
+        console.log("ERROR:", file.src);
+        });
+        
+        this.load.image(
+        "prota",
+        "Sprites/Prota.png"
+        );
+        this.load.image("NpcH", "Sprites/NpcH.png");
+        this.load.image("NpcM", "Sprites/NpcM.png");
+        this.load.image("Mancha", "Sprites/Mancha.png");
+        this.load.image("Puerta", "Sprites/Puerta.png");
+        this.load.image("Charco", "Sprites/Charco.png");
+        }
 
     create() {
+        
+        const map = this.make.tilemap({ key: "level1" });
+        const objetos = map.getObjectLayer("Objetos");
+        const playerSpawn = objetos.objects.find(
+        obj => obj.name === "PlayerSpawn"
+        );
+        const enemySpawn = objetos.objects.find(
+        obj => obj.name === "EnemySpawn"
+        );
+        const npcHSpawn1 = objetos.objects.find(
+        obj => obj.name === "NpcHSpawn1"
+        );
+        const npcHSpawn2 = objetos.objects.find(
+        obj => obj.name === "NpcHSpawn2"
+        );
+        const npcMSpawn = objetos.objects.find(
+        obj => obj.name === "NpcMSpawn"
+        );
+        const doorSpawn = objetos.objects.find(
+        obj => obj.name === "DoorSpawn"
+        );
+        const charcoSpawn = objetos.objects.find(
+        obj => obj.name === "CharcoSpawn"
+        );
+        console.log(playerSpawn);
+        console.log(objetos);
+        const tileset = map.addTilesetImage("AssetMapa", "tiles");
+        
+        console.log(map);
+        console.log(tileset);
 
-        this.player = this.add.rectangle(
-            400,
-            300,
-            50,
-            50,
-            0x00aaff
+        map.createLayer("Fondo", tileset, 0, 0);
+        map.createLayer("Plataformas", tileset, 0, 0);
+        
+        this.player = this.add.image(
+            playerSpawn.x,
+            playerSpawn.y,
+            "prota"
         );
         this.aura = this.add.circle(
         this.player.x,
         this.player.y,
-            80,
+            40,
             0x00aaff,
             0.25
         );
+        
         this.objects = [];
+
         this.objects.push(
-            this.add.rectangle(650, 300, 50, 50, 0x666666)
+            this.add.image(npcHSpawn1.x, npcHSpawn1.y, "NpcH")
         );
 
         this.objects.push(
-            this.add.rectangle(550, 200, 50, 50, 0x666666)
+            this.add.image(npcHSpawn2.x, npcHSpawn2.y, "NpcH")
         );
 
         this.objects.push(
-            this.add.rectangle(300, 450, 50, 50, 0x666666)
+            this.add.image(npcMSpawn.x, npcMSpawn.y, "NpcM")
         );
         for (let object of this.objects) {
             object.colored = false;
@@ -46,11 +107,10 @@ export default class Level1Scene extends Phaser.Scene {
         color: "#ffffff"
         }
         );
-        this.enemy = this.add.circle(
-            400,
-            150,
-            25,
-            0x000000
+        this.enemy = this.add.image(
+        enemySpawn.x,
+        enemySpawn.y,
+        "Mancha"
         );
         this.enemyCooldown = 0;
         this.enemyDirection = 1;
@@ -70,15 +130,18 @@ export default class Level1Scene extends Phaser.Scene {
         }
         );
         this.winText.setVisible(false);
-        this.door = this.add.rectangle(
-            700,
-            500,
-            60,
-            80,
-            0x00ff00
+        this.door = this.add.image(
+        doorSpawn.x,
+        doorSpawn.y,
+        "Puerta"
         );
-
+        this.charco = this.add.image(
+        charcoSpawn.x,
+        charcoSpawn.y,
+        "Charco"
+        );
         this.door.setVisible(false);
+        this.cameras.main.setBounds(0, 0, map.widthInPixels, map.heightInPixels);
     }
 
     update() {
@@ -88,7 +151,7 @@ export default class Level1Scene extends Phaser.Scene {
             this.enemyCooldown--;
         }
 
-        this.enemy.x += 2 * this.enemyDirection;
+        this.enemy.x += 4 * this.enemyDirection;
         if (this.enemy.x > 700) {
             this.enemyDirection = -1;
         }
@@ -99,10 +162,12 @@ export default class Level1Scene extends Phaser.Scene {
 
         if (this.keys.left.isDown) {
             this.player.x -= speed;
+            this.player.setFlipX(true);
         }
 
         if (this.keys.right.isDown) {
             this.player.x += speed;
+            this.player.setFlipX(false);
         }
 
         if (this.keys.up.isDown) {
@@ -124,7 +189,7 @@ export default class Level1Scene extends Phaser.Scene {
         object.y
         );
 
-       if (distance < 90) {
+       if (distance < 45) {
             object.fillColor = 0x00aaff;
 
         if (!object.colored) {
@@ -176,8 +241,15 @@ export default class Level1Scene extends Phaser.Scene {
             this.enemy.x,
             this.enemy.y
         );
-
-       if (enemyDistance < 50 && this.enemyCooldown <= 0) {
+        const charcoDistance = Phaser.Math.Distance.Between(
+            this.player.x,
+            this.player.y,
+            this.charco.x,
+            this.charco.y
+        );
+        if ((enemyDistance < 50 || charcoDistance < 50) &&
+            this.enemyCooldown <= 0
+            )   {
             for (let object of this.objects) {
 
             if (object.colored) {
