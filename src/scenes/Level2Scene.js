@@ -1,43 +1,38 @@
 import Phaser from "phaser";
 
-export default class Level1Scene extends Phaser.Scene {
+export default class Level2Scene extends Phaser.Scene {
 
     constructor() {
-        super("Level1Scene");
+        super("Level2Scene");
         this.lives = 3;
         this.maxLives = 3;
         this.invulnerable = false;
         this.invulnerableTimer = 0;
         this.gameOver = false;
+        this.levelComplete = false;
     }
+
     preload() {
         this.load.tilemapTiledJSON(
-        "level1",
-        "Maps/Level1.tmj"
-    );
-    
+            "level2",
+            "Maps/Level2.tmj"
+        );
+
         this.load.image(
             "tiles",
             "TileSet/AssetMapa.png"
         );
-        this.load.on("filecomplete", (key) => {
-        console.log("Cargó:", key);
-        });
 
-        this.load.on("loaderror", (file) => {
-        console.log("ERROR:", file.src);
-        });
-        
         this.load.image(
-        "prota",
-        "Sprites/Prota.png"
+            "prota",
+            "Sprites/Prota.png"
         );
         this.load.image("NpcH", "Sprites/NpcH.png");
         this.load.image("NpcM", "Sprites/NpcM.png");
-        this.load.image("Mancha", "Sprites/Mancha.png");
         this.load.image("Puerta", "Sprites/Puerta.png");
         this.load.image("Charco", "Sprites/Charco.png");
-        }
+        this.load.image("Tinta", "Sprites/Tinta.png");
+    }
 
     create() {
         this.lives = this.registry.get("playerLives") ?? 3;
@@ -48,51 +43,26 @@ export default class Level1Scene extends Phaser.Scene {
         this.invulnerable = false;
         this.invulnerableTimer = 0;
         this.gameOver = false;
+        this.levelComplete = false;
         this.physics.resume();
         this.carriedNpc = null;
         this.pickupRange = 50;
+        this.dropTimer = 1400;
+        this.warningTimer = 0;
+        this.warningVisible = false;
 
-        const map = this.make.tilemap({ key: "level1" });
+        const map = this.make.tilemap({ key: "level2" });
         const objetos = map.getObjectLayer("Objetos");
-        const playerSpawn = objetos.objects.find(
-        obj => obj.name === "PlayerSpawn"
-        );
-        const enemySpawn = objetos.objects.find(
-        obj => obj.name === "EnemySpawn"
-        );
-        const npcHSpawn1 = objetos.objects.find(
-        obj => obj.name === "NpcHSpawn1"
-        );
-        const npcHSpawn2 = objetos.objects.find(
-        obj => obj.name === "NpcHSpawn2"
-        );
-        const npcMSpawn = objetos.objects.find(
-        obj => obj.name === "NpcMSpawn"
-        );
-        const doorSpawn = objetos.objects.find(
-        obj => obj.name === "DoorSpawn"
-        );
-        const charcoSpawn = objetos.objects.find(
-        obj => obj.name === "CharcoSpawn"
-        );
-        console.log(playerSpawn);
-        console.log(objetos);
-        const tileset = map.addTilesetImage("AssetMapa", "tiles");
-        
-        console.log(map);
-        console.log(tileset);
+        const objectSpawns = objetos?.objects ?? [];
+        const playerSpawn = objectSpawns.find(obj => obj.name === "PlayerSpawn");
+        const npcSpawnObjects = objectSpawns.filter(obj => obj.name?.startsWith("NpcHSpawn") || obj.name?.startsWith("NpcMSpawn"));
+        const charcoSpawnObjects = objectSpawns.filter(obj => obj.name === "CharcoSpawn");
+        const doorSpawn = objectSpawns.find(obj => obj.name === "DoorSpawn");
+        this.tintaSpawns = objectSpawns.filter(obj => obj.name === "TintaSpawn");
 
-        const plataformas = map.createLayer(
-        "Plataformas",
-        tileset,
-        0,
-        0
-        );
-        
-        // Aplicar desaturación al mapa usando tint
+        const tileset = map.addTilesetImage("AssetMapa", "tiles");
+        const plataformas = map.createLayer("Plataformas", tileset, 0, 0);
         plataformas.setTint(0x888888);
-        
-        this.world = this.add.container(0, 0);
         plataformas.setCollisionByExclusion([-1]);
 
         this.playerSpawn = {
@@ -105,44 +75,33 @@ export default class Level1Scene extends Phaser.Scene {
             this.playerSpawn.y,
             "prota"
         );
-        this.player.clearTint();
         this.player.setCollideWorldBounds(true);
         this.player.body.setSize(40, 70);
         this.player.body.setOffset(42, 30);
-        console.log(this.player.width, this.player.height);
-        
-        // Crear aura alrededor del jugador
-        this.auraGraphics = this.make.graphics({ x: 0, y: 0, add: true });
-        this.auraGraphics.setDepth(0);
         this.physics.add.collider(this.player, plataformas);
-         
+
         this.objects = [];
 
-       this.objects.push(
-    this.add.image(npcHSpawn1.x, npcHSpawn1.y, "NpcH")
-);
-
-this.objects.push(
-    this.add.image(npcHSpawn2.x, npcHSpawn2.y, "NpcH")
-);
-
-this.objects.push(
-    this.add.image(npcMSpawn.x, npcMSpawn.y, "NpcM")
-);
-        // Aplicar desaturación a todos los NPCs
-        for (let obj of this.objects) {
-            obj.setTint(0x888888); // Gris para desaturación
-            obj.colored = false;
+        for (const spawn of npcSpawnObjects) {
+            const spriteKey = spawn.name.startsWith("NpcHSpawn") ? "NpcH" : "NpcM";
+            const npc = this.add.image(spawn.x, spawn.y, spriteKey);
+            npc.setTint(0x888888);
+            npc.colored = false;
+            this.objects.push(npc);
         }
-        this.scoreText = this.add.text(
-            20,
-            20,
-            "Objetos coloreados: 0/3",
-            {
-                fontSize: "24px",
-                color: "#ffffff"
-            }
-        );
+
+        this.charcos = [];
+        for (const spawn of charcoSpawnObjects) {
+            const charco = this.physics.add.staticImage(spawn.x, spawn.y, "Charco");
+            charco.body.setSize(80, 80, true);
+            this.charcos.push(charco);
+            this.physics.add.overlap(this.player, charco, this.handlePlayerHit, null, this);
+        }
+
+        this.scoreText = this.add.text(20, 20, "Objetos coloreados: 0/3", {
+            fontSize: "24px",
+            color: "#ffffff"
+        });
         this.livesText = this.add.text(20, 60, `Vidas: ${this.lives}`, {
             fontSize: "24px",
             color: "#ff0000"
@@ -154,47 +113,45 @@ this.objects.push(
 
         this.createGameOverScreen();
 
-        this.enemy = this.physics.add.image(
-            enemySpawn.x,
-            enemySpawn.y,
-            "Mancha"
-        );
-        this.enemy.setTint(0x888888);
-        this.enemy.body.allowGravity = false;
-        this.enemy.body.setImmovable(true);
-        this.enemyCooldown = 0;
-        this.enemyDirection = 1;
         this.keys = this.input.keyboard.addKeys({
             up: "W",
-            down: "S",
             left: "A",
             right: "D",
             interact: "F"
         });
-        this.winText = this.add.text(
-            250,
-            250,
-            "",
-            {
-                fontSize: "48px",
-                color: "#00ff00"
-            }
-        );
-        this.winText.setVisible(false);
-        this.door = this.add.image(
-            doorSpawn.x,
-            doorSpawn.y,
-            "Puerta"
-        );
-        this.charco = this.physics.add.staticImage(
-            charcoSpawn.x,
-            charcoSpawn.y,
-            "Charco"
-        );
-        this.charco.body.setSize(80, 80, true);
 
-        this.physics.add.overlap(this.player, this.charco, this.handlePlayerHit, null, this);
-        this.physics.add.overlap(this.player, this.enemy, this.handlePlayerHit, null, this);
+        this.winText = this.add.text(250, 250, "", {
+            fontSize: "48px",
+            color: "#00ff00"
+        }).setVisible(false);
+
+        this.door = this.add.image(doorSpawn.x, doorSpawn.y, "Puerta");
+
+        this.auraGraphics = this.make.graphics({ x: 0, y: 0, add: true });
+        this.auraGraphics.setDepth(0);
+
+        this.tintaDrop = this.physics.add.image(400, -60, "Tinta");
+        this.tintaDrop.setScale(0.8);
+        this.tintaDrop.setVisible(false);
+        this.tintaDrop.setActive(false);
+        this.tintaDrop.body.allowGravity = true;
+        this.tintaDrop.body.gravity.y = 80;
+        this.tintaDrop.body.setBounce(0.1);
+        this.physics.add.collider(this.tintaDrop, plataformas, () => {
+            this.resetTintaDrop();
+        });
+        this.physics.add.overlap(this.player, this.tintaDrop, () => {
+            this.handlePlayerHit();
+            this.resetTintaDrop();
+        });
+
+        this.warningText = this.add.text(680, 24, "¡CUIDADO!", {
+            fontSize: "24px",
+            color: "#ffef99",
+            backgroundColor: "#5a1a1a",
+            padding: { x: 10, y: 6 }
+        }).setOrigin(0.5);
+        this.warningText.setVisible(false);
     }
 
     createGameOverScreen() {
@@ -212,18 +169,14 @@ this.objects.push(
             color: "#ffffff",
             backgroundColor: "#333333",
             padding: { x: 20, y: 10 }
-        })
-            .setOrigin(0.5)
-            .setInteractive();
+        }).setOrigin(0.5).setInteractive();
 
         const menuButton = this.add.text(400, 390, "VOLVER AL MENÚ", {
             fontSize: "28px",
             color: "#ffffff",
             backgroundColor: "#333333",
             padding: { x: 20, y: 10 }
-        })
-            .setOrigin(0.5)
-            .setInteractive();
+        }).setOrigin(0.5).setInteractive();
 
         this.gameOverContainer.add([overlay, title, retryButton, menuButton]);
         this.gameOverContainer.setVisible(false);
@@ -260,41 +213,32 @@ this.objects.push(
             }
         }
 
-        const speed = 4;
-        const auraRadius = 40; // Radio del aura
-        
-        if (this.enemyCooldown > 0) {
-            this.enemyCooldown--;
+        this.dropTimer -= delta;
+        if (this.warningVisible) {
+            this.warningTimer -= delta / 1000;
+            if (this.warningTimer <= 0) {
+                this.warningVisible = false;
+                this.warningText.setVisible(false);
+            }
         }
 
-        this.enemy.x += 4 * this.enemyDirection;
-        if (this.enemy.x > 700) {
-            this.enemyDirection = -1;
+        if (this.dropTimer <= 0) {
+            this.spawnTintaDrop();
         }
 
-        if (this.enemy.x < 100) {
-            this.enemyDirection = 1;
-        }
-
-        // Dibujar aura alrededor del jugador
         this.auraGraphics.clear();
-        const auraColor = 0xffff00; // Color amarillo para el aura
-        const auraAlpha = 0.3;
-        this.auraGraphics.fillStyle(auraColor, auraAlpha);
-        this.auraGraphics.fillCircle(this.player.x, this.player.y, auraRadius);
+        this.auraGraphics.fillStyle(0xffff00, 0.3);
+        this.auraGraphics.fillCircle(this.player.x, this.player.y, 40);
 
         this.player.setVelocityX(0);
-
         if (this.keys.left.isDown) {
             this.player.setVelocityX(-200);
             this.player.setFlipX(true);
         }
-
         if (this.keys.right.isDown) {
             this.player.setVelocityX(200);
             this.player.setFlipX(false);
         }
-
         if (this.keys.up.isDown && this.player.body.blocked.down) {
             this.player.setVelocityY(-450);
         }
@@ -307,7 +251,7 @@ this.objects.push(
             this.carriedNpc.x = this.player.x + (this.player.flipX ? -30 : 30);
             this.carriedNpc.y = this.player.y - 20;
         }
-        
+
         for (let i = 0; i < this.objects.length; i++) {
             const object = this.objects[i];
             const distance = Phaser.Math.Distance.Between(
@@ -316,76 +260,104 @@ this.objects.push(
                 object.x,
                 object.y
             );
-            
-            if (distance < 40) { // Radio del aura
-                if (!object.colored) {
-                    object.colored = true;
-                    object.clearTint();
-                    this.score += 10;
-                    this.savedNpcs += 1;
-                    this.registry.set("score", this.score);
-                    this.registry.set("savedNpcs", this.savedNpcs);
-                    this.scoreHudText.setText(`Puntos: ${this.score}`);
-                }
+
+            if (distance < 40 && !object.colored) {
+                object.colored = true;
+                object.clearTint();
+                this.score += 10;
+                this.savedNpcs += 1;
+                this.registry.set("score", this.score);
+                this.registry.set("savedNpcs", this.savedNpcs);
+                this.scoreHudText.setText(`Puntos: ${this.score}`);
             }
         }
 
         let coloredCount = 0;
-
-        for (let object of this.objects) {
+        for (const object of this.objects) {
             if (object.colored) {
                 coloredCount++;
             }
         }
-        this.scoreText.setText(
-        `Objetos coloreados: ${coloredCount}/${this.objects.length}`
-        );
-       if (coloredCount === this.objects.length) {
-            this.door.setVisible(true);
-        }
-            else {
-                this.door.setVisible(false);
-            }
+        this.scoreText.setText(`Objetos coloreados: ${coloredCount}/${this.objects.length}`);
+
+        this.door.setVisible(coloredCount === this.objects.length);
 
         if (this.door.visible) {
+            const doorDistance = Phaser.Math.Distance.Between(
+                this.player.x,
+                this.player.y,
+                this.door.x,
+                this.door.y
+            );
 
-        const doorDistance = Phaser.Math.Distance.Between(
-            this.player.x,
-            this.player.y,
-            this.door.x,
-            this.door.y
-        );
+            if (doorDistance < 60 && !this.levelComplete) {
+                this.levelComplete = true;
+                this.winText.setText("¡Nivel 2 completado!");
+                this.winText.setVisible(true);
+                this.registry.set("playerLives", this.lives);
+                this.registry.set("score", this.score);
+                this.registry.set("savedNpcs", this.savedNpcs);
+                this.registry.set("deaths", this.deaths);
+                this.registry.set("remainingLives", this.lives);
+                this.time.delayedCall(900, () => {
+                    this.scene.start("Level3Scene");
+                });
+            }
+        }
 
-        if (doorDistance < 60) {
-            this.winText.setText("¡Nivel completado!");
-            this.winText.setVisible(true);
-            this.registry.set("playerLives", this.lives);
-            this.registry.set("score", this.score);
-            this.registry.set("savedNpcs", this.savedNpcs);
-            this.registry.set("deaths", this.deaths);
-            this.registry.set("remainingLives", this.lives);
-            this.time.delayedCall(700, () => {
-                this.scene.start("Level2Scene");
-            });
-        }
-        }
-        const enemyDistance = Phaser.Math.Distance.Between(
-            this.player.x,
-            this.player.y,
-            this.enemy.x,
-            this.enemy.y
-        );
-        if ((enemyDistance < 50) && this.enemyCooldown <= 0) {
-            for (let i = 0; i < this.objects.length; i++) {
-                const object = this.objects[i];
-                if (object.colored) {
-                    object.colored = false;
-                    object.setTint(0x888888);
-                    this.enemyCooldown = 120;
+        if (this.tintaDrop && this.tintaDrop.active) {
+            if (this.tintaDrop.y > 700) {
+                this.resetTintaDrop();
+            }
+
+            for (const object of this.objects) {
+                const distance = Phaser.Math.Distance.Between(
+                    this.tintaDrop.x,
+                    this.tintaDrop.y,
+                    object.x,
+                    object.y
+                );
+
+                if (distance < 35) {
+                    this.handlePlayerHit();
+                    this.resetTintaDrop();
                     break;
                 }
             }
         }
+    }
+
+    spawnTintaDrop() {
+        if (!this.tintaDrop) {
+            return;
+        }
+
+        const spawnPoint = Phaser.Utils.Array.GetRandom(this.tintaSpawns ?? []);
+        const spawnX = spawnPoint?.x ?? Phaser.Math.Between(120, 680);
+        const spawnY = spawnPoint?.y ?? -40;
+        this.tintaDrop.setPosition(spawnX, spawnY);
+        this.tintaDrop.setVelocity(0, 0);
+        this.warningText.setPosition(spawnX, 24);
+        this.warningText.setVisible(true);
+        this.warningVisible = true;
+        this.warningTimer = 1.2;
+        this.tintaDrop.setVisible(true);
+        this.tintaDrop.setActive(true);
+        this.tintaDrop.body.gravity.y = 45;
+        this.tintaDrop.setVelocityY(12);
+        this.tintaDrop.setVelocityX(Phaser.Math.Between(-8, 8));
+        this.dropTimer = Phaser.Math.Between(1600, 2400);
+    }
+
+    resetTintaDrop() {
+        if (!this.tintaDrop) {
+            return;
+        }
+
+        this.tintaDrop.setPosition(-100, -100);
+        this.tintaDrop.setVelocity(0, 0);
+        this.tintaDrop.setVisible(false);
+        this.tintaDrop.setActive(false);
     }
 
     toggleCarryNpc() {
@@ -429,6 +401,7 @@ this.objects.push(
         const spawnY = this.playerSpawn?.y ?? 100;
         this.player.setPosition(spawnX, spawnY);
         this.player.setVelocity(0, 0);
+        this.carriedNpc = null;
 
         this.invulnerable = true;
         this.invulnerableTimer = 1.2;
